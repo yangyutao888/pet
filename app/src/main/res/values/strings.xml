@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">MyCompose</string>
+    <string name="title_activity_compose">ComposeActivity</string>
+    <string name="title_activity_dice">DiceActivity</string>
+
+
+    <string name="affirmation1">人生哪有十如意</string>
+    <string name="affirmation2">万事只求半称心</string>
+    <string name="affirmation3">人生本如此</string>
+    <string name="affirmation4">咸淡两由之</string>
+    <string name="affirmation5">祸兮福所倚</string>
+    <string name="affirmation6">福兮祸所伏</string>
+    <string name="affirmation7">月满则亏</string>
+    <string name="affirmation8">水满则溢</string>
+    <string name="affirmation9">财米油盐酱醋茶</string>
+    <string name="affirmation10">平淡生活进万家</string>
+    <string name="title_activity_tank">TankActivity</string>
+</resources>

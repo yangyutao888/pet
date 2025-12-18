@@ -1,0 +1,707 @@
+package com.one.yoread
+
+import android.os.Bundle
+import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.constraintlayout.compose.ConstraintLayout
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                // 主界面
+                MainScreen()
+            }
+        }
+    }
+}
+
+/**
+ * 主界面组合函数
+ * 包含顶部导航栏和内容区域
+ * 支持点击tab切换和左右滑动切换
+ */
+@Composable
+fun MainScreen() {
+    // Tab 页面数量
+    val tabCount = 2
+    // 使用 PagerState 管理页面状态，默认显示第一个页面（发现tab，索引0）
+    val pagerState = rememberPagerState(initialPage = 0) { tabCount }
+    // 记录当前选中的 tab 索引，用于顶部导航栏显示
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // 监听 PagerState 的变化，同步到 selectedTabIndex
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            selectedTabIndex = page
+        }
+    }
+
+    // 首页整体背景色：灰黑色
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF2C2C2C)) // 灰黑色背景
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+        // 顶部导航栏区域（宽度撑满、高度80px）
+        TopNavigationBar(
+            selectedTabIndex = selectedTabIndex,
+            onTabSelected = { index ->
+                // 点击tab时，切换到对应的页面
+                coroutineScope.launch {
+                    pagerState.animateScrollToPage(index)
+                }
+            }
+        )
+
+            // Tab 关联的内容显示区域（撑满剩余屏幕区域）
+            // 使用 HorizontalPager 实现左右滑动切换
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f) // 占据剩余空间
+            ) { page ->
+                // 根据页面索引显示不同的内容
+                TabContentPage(pageIndex = page)
+            }
+        }
+    }
+}
+
+/**
+ * 顶部导航栏
+ * 使用 ConstraintLayout 实现精确布局，兼容多设备尺寸
+ * @param selectedTabIndex 当前选中的 tab 索引
+ * @param onTabSelected tab 选中回调
+ */
+@Composable
+fun TopNavigationBar(
+    selectedTabIndex: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    // 控制弹框显示/隐藏的状态
+    var showDialog by remember { mutableIntStateOf(0) }
+    val showDialogBoolean = showDialog > 0
+    
+    // 显示弹框
+    if (showDialogBoolean) {
+        LogoDialog(
+            onDismiss = { showDialog = 0 }
+        )
+    }
+    // 导航栏高度：80px（使用dp单位，自适应不同屏幕密度）
+    val navigationBarHeight = 80.dp
+    // Logo 尺寸
+    val logoSize = 60.dp
+    // 外边距
+    val margin = 20.dp
+    // Tab 之间的间隔
+    val tabSpacing = 60.dp
+
+    // 导航栏背景色：使用灰黑色背景，与首页整体背景一致
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth() // 宽度撑满
+            .height(navigationBarHeight), // 高度80px
+        color = Color(0xFF2C2C2C) // 灰黑色背景，与首页整体背景一致
+    ) {
+        ConstraintLayout(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 创建约束引用
+            val (logoRef, discoverTabRef, recommendTabRef, loginIconRef, centerRef) = createRefs()
+            
+            // 创建一个不可见的居中参考点，用于让两个tab整体居中
+            Box(
+                modifier = Modifier
+                    .size(1.dp) // 不可见的参考点
+                    .constrainAs(centerRef) {
+                        // 这个参考点在屏幕正中心
+                        centerHorizontallyTo(parent)
+                        centerVerticallyTo(parent)
+                    }
+            )
+
+            // 左上角 Logo（60px * 60px，外边距 20px）
+            // 使用 drawable 中的图片资源（支持 PNG、JPG、WEBP 格式）
+            // 添加点击事件，点击后弹出弹框
+            Box(
+                modifier = Modifier
+                    .size(logoSize) // 60px * 60px
+                    .background(
+                        color = Color(0xFFEC0934), // 浅蓝色背景
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .clickable { showDialog = 1 } // 点击logo显示弹框
+                    .constrainAs(logoRef) {
+                        // 约束到父布局的左上角，外边距20px
+                        start.linkTo(parent.start, margin = margin)
+                        top.linkTo(parent.top, margin = margin)
+                        bottom.linkTo(parent.bottom, margin = margin)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.mipmap.main_logo_w),
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(logoSize - 8.dp), // 稍微小一点，留出边框空间
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            // "发现" Tab（与左侧 logo 垂直对齐，整体居中在屏幕中间）
+            // 使用居中参考点让两个 tab 的中心点整体居中
+            TabButton(
+                text = "发现",
+                isSelected = selectedTabIndex == 0,
+                onClick = { onTabSelected(0) },
+                modifier = Modifier.constrainAs(discoverTabRef) {
+                    // 与 logo 垂直对齐（顶部和底部对齐）
+                    top.linkTo(logoRef.top)
+                    bottom.linkTo(logoRef.bottom)
+                    // 让"发现"tab的结束位置在中心参考点左侧（tab间距/2），使两个tab的中心点居中
+                    end.linkTo(centerRef.start, margin = tabSpacing / 2)
+                }
+            )
+
+            // "推荐" Tab
+            TabButton(
+                text = "推荐",
+                isSelected = selectedTabIndex == 1,
+                onClick = { onTabSelected(1) },
+                modifier = Modifier.constrainAs(recommendTabRef) {
+                    // 与"发现" tab 垂直对齐
+                    top.linkTo(discoverTabRef.top)
+                    bottom.linkTo(discoverTabRef.bottom)
+                    // 在"发现" tab 右侧
+                    start.linkTo(discoverTabRef.end, margin = tabSpacing)
+                }
+            )
+
+            // 右上角登录图标（60px * 60px，外边距 20px）
+            Box(
+                modifier = Modifier
+                    .size(logoSize) // 60px * 60px
+                    .background(
+                        color = Color(0xFFFFE0B2), // 浅橙色背景
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .constrainAs(loginIconRef) {
+                        // 约束到父布局的右上角，外边距20px
+                        end.linkTo(parent.end, margin = margin)
+                        top.linkTo(parent.top, margin = margin)
+                        bottom.linkTo(parent.bottom, margin = margin)
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "登录",
+                    modifier = Modifier.size(logoSize - 20.dp), // 图标稍微小一点
+                    tint = Color(0xFFE65100) // 深橙色图标
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Tab 按钮组件
+ * 选中和未选中状态有明显的颜色区分
+ * @param text 显示的文本
+ * @param isSelected 是否选中
+ * @param onClick 点击回调
+ * @param modifier 修饰符
+ */
+@Composable
+fun TabButton(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clickable { onClick() }
+//            .background(
+//                // 选中时使用蓝色背景，未选中时使用更明显的灰色背景，确保可见性
+//                color = if (isSelected) Color(0xFF2196F3) else Color(0xFFBDBDBD),
+//                shape = RoundedCornerShape(8.dp)
+//            )
+            .padding(horizontal = 20.dp, vertical = 10.dp), // 增加内边距，让按钮更明显
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 24.sp, // 稍微增大字体
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold, // 未选中也使用半粗体，更明显
+            // 选中时使用白色文字，未选中时使用深灰色文字，颜色区分明显
+            color = if (isSelected) Color.White else Color(0xFF9B9797) // 使用更深的颜色
+        )
+    }
+}
+
+/**
+ * Tab 关联的内容页面
+ * 根据页面索引显示不同的内容
+ * 每个页面撑满整个显示区域
+ * @param pageIndex 页面索引（0: 发现, 1: 推荐）
+ */
+@Composable
+fun TabContentPage(pageIndex: Int) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize() // 撑满整个显示区域
+            .background(Color(0xFF2C2C2C)), // 灰黑色背景，与首页整体背景一致
+        contentAlignment = Alignment.Center
+    ) {
+        // 根据页面索引显示不同的内容
+        when (pageIndex) {
+             0 -> {
+                // "发现" tab 的内容区域：垂直滑动布局
+                DiscoverContent()
+            }
+            1 -> {
+                // "推荐" tab 的内容区域
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "推荐",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White // 白色文字，在灰黑色背景上更清晰
+                    )
+                    Text(
+                        text = "这是推荐页面的内容区域",
+                        fontSize = 16.sp,
+                        color = Color(0xFFCCCCCC), // 浅灰色文字，在灰黑色背景上更清晰
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 发现页内容区域
+ * 实现垂直滑动布局，包含banner轮播图和分类列表
+ */
+@Composable
+fun DiscoverContent() {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        item {
+            // 顶部区域：水平平分两份，高度300dp
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+            ) {
+                // 左边区域：banner轮播图（占50%宽度）
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    BannerCarousel()
+                }
+                
+                // 右边区域：分类列表（占50%宽度）
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    CategoryList()
+                }
+            }
+        }
+        
+        // 可以继续添加其他内容项
+        // 每5个item组成一行，平分整体宽度
+        // 总共20个item，分成4行
+        val totalItems = 66
+        val itemsPerRow = 10
+        val totalRows = (totalItems + itemsPerRow - 1) / itemsPerRow // 向上取整
+        
+        items(totalRows) { rowIndex ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                // 每行显示5个item
+                repeat(itemsPerRow) { colIndex ->
+                    val itemIndex = rowIndex * itemsPerRow + colIndex
+                    if (itemIndex < totalItems) {
+                        // 使用weight来平分宽度
+                        CardItem(
+                            title = "卡片 ${itemIndex + 1}",
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        // 如果最后一行不足5个，用Spacer填充
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Banner 轮播图组件
+ * 支持无限循环滑动、自动轮播（每3秒）、手动滑动、定位点指示器
+ */
+@Composable
+fun BannerCarousel() {
+    // Banner 图片列表（示例数据，实际应该从数据源获取）
+    val bannerImages = remember {
+        listOf(
+            R.drawable.nice,
+            R.drawable.nice_a,
+            R.drawable.nice_b
+        )
+    }
+    
+    val bannerCount = bannerImages.size
+    // 使用一个很大的pageCount来实现无限循环效果
+    // 从中间开始，确保可以向前和向后滑动
+    val initialPage = 1000 // 从中间开始，确保可以循环
+    val pageCount = Int.MAX_VALUE
+    
+    // 使用 PagerState 管理轮播状态，支持无限循环
+    val pagerState = rememberPagerState(initialPage = initialPage) { pageCount }
+    
+    // 计算当前实际显示的图片索引（通过取模实现循环）
+    val currentImageIndex = pagerState.currentPage % bannerCount
+    
+    // 自动轮播逻辑：每3秒切换到下一页
+    // 当用户手动滑动时，isScrollInProgress 为 true，暂停自动轮播
+    LaunchedEffect(pagerState) {
+        while (true) {
+            delay(3000) // 3秒延迟
+            // 如果用户正在手动滑动，等待滑动完成
+            if (!pagerState.isScrollInProgress) {
+                // 直接切换到下一页，由于pageCount很大，可以实现无限循环
+                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+            }
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp), // 10dp外边距
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        // 轮播图：添加15dp圆角
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            // 通过取模计算实际显示的图片索引，实现循环效果
+            val imageIndex = page % bannerCount
+            Image(
+                painter = painterResource(id = bannerImages[imageIndex]),
+                contentDescription = "Banner ${imageIndex + 1}",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(15.dp)), // 15dp圆角，使用clip实现
+                contentScale = ContentScale.Crop
+            )
+        }
+        
+        // 定位点指示器（显示在轮播图下方）
+        Row(
+            modifier = Modifier
+                .padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            repeat(bannerCount) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(
+                            width = if (currentImageIndex == index) 20.dp else 8.dp,
+                            height = 8.dp
+                        )
+                        .background(
+                            color = if (currentImageIndex == index) 
+                                Color.White 
+                            else 
+                                Color.White.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 分类列表组件
+ * 分上下两行，每行4个类型，存在间隔，整体居中显示
+ */
+@Composable
+fun CategoryList() {
+    // 分类数据（示例数据，实际应该从数据源获取）
+    val categories = remember {
+        listOf(
+            "类型1", "类型2", "类型3", "类型4",
+            "类型5", "类型6", "类型7", "类型8"
+        )
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // 第一行：4个分类
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            categories.take(4).forEach { category ->
+                CategoryItem(text = category)
+            }
+        }
+        
+        // 行间距
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // 第二行：4个分类
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            categories.drop(4).take(4).forEach { category ->
+                CategoryItem(text = category)
+            }
+        }
+    }
+}
+
+/**
+ * 分类项组件
+ * @param text 分类名称
+ */
+@Composable
+fun CategoryItem(text: String) {
+    Box(
+        modifier = Modifier
+            .size(60.dp)
+            .background(
+                color = Color(0xFF3C3C3C),
+                shape = RoundedCornerShape(8.dp)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = 12.sp,
+            color = Color.White,
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * 卡片项组件
+ * 平分整体宽度5份，外边距15dp，高度为宽度的1.2倍，圆角10dp，随机背景色
+ * @param title 卡片标题
+ * @param modifier 修饰符
+ */
+@Composable
+fun CardItem(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    // 生成随机背景色（基于title的hashCode，确保相同title颜色一致）
+    val backgroundColor = remember(title) {
+        val colors = listOf(
+            Color(0xFFFF6B6B), // 红色
+            Color(0xFF4ECDC4), // 青色
+            Color(0xFFFFE66D), // 黄色
+            Color(0xFF95E1D3), // 浅绿色
+            Color(0xFFF38181), // 粉红色
+            Color(0xFFAA96DA), // 紫色
+            Color(0xFFFCBAD3), // 粉色
+            Color(0xFFA8E6CF), // 浅绿
+            Color(0xFFFFD3A5), // 橙色
+            Color(0xFFA8D8EA)  // 浅蓝
+        )
+        colors[title.hashCode().absoluteValue % colors.size]
+    }
+    
+    // 使用BoxWithConstraints来获取实际宽度，计算高度
+    BoxWithConstraints(
+        modifier = modifier
+    ) {
+        // 计算高度：宽度 * 1.2
+        val cardWidth = maxWidth - 0.dp // 减去外边距已经在Row中处理
+        val cardHeight = cardWidth * 1.2f
+        
+        Box(
+            modifier = Modifier
+                .width(cardWidth)
+                .height(cardHeight)
+                .background(
+                    color = backgroundColor,
+                    shape = RoundedCornerShape(10.dp) // 10dp圆角
+                )
+                .padding(12.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+/**
+ * Logo 点击后的弹框组件
+ * 弹框尺寸：400dp * 300dp，圆角15dp，背景浅白色
+ * 点击弹框外区域可关闭弹框
+ * @param onDismiss 关闭弹框的回调
+ */
+@Composable
+fun LogoDialog(onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss, // 点击外部区域关闭弹框
+        properties = DialogProperties(
+            dismissOnBackPress = true, // 按返回键关闭
+            dismissOnClickOutside = true // 点击外部区域关闭
+        )
+    ) {
+        // 弹框背景：透明，让外部区域可见
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable { onDismiss() }, // 点击外部区域关闭
+            contentAlignment = Alignment.Center
+        ) {
+            // 弹框内容：200dp * 150dp，圆角15dp，浅白色背景
+            Box(
+                modifier = Modifier
+                    .size(width = 400.dp, height = 300.dp)
+                    .background(
+                        color = Color(0xFFFAFAFA), // 浅白色背景
+                        shape = RoundedCornerShape(15.dp)
+                    )
+                    .clickable { }, // 阻止点击弹框内部时关闭弹框
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 标题：水平居中，垂直占弹框80%的上方显示（即顶部20%的位置，约30dp）
+                    Text(
+                        text = "有说有笑",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF212121),
+                        modifier = Modifier
+                            .padding(top = 30.dp) // 垂直占弹框80%的上方，即顶部20%的位置（150 * 0.2 = 30dp）
+                    )
+                    
+                    // 内容区域：160dp * 80dp，水平居中，在标题下方20dp
+                    Box(
+                        modifier = Modifier
+                            .size(width = 160.dp, height = 80.dp)
+                            .padding(top = 20.dp)
+                            .background(
+                                color = Color.White,
+                                shape = RoundedCornerShape(8.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "今天昨天、明天、未来等待",
+                            fontSize = 14.sp,
+                            color = Color(0xFF424242),
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
