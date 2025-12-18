@@ -1,6 +1,7 @@
 package com.one.yoread
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.Image
@@ -51,6 +52,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import android.widget.Toast
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -100,17 +115,24 @@ class MainActivity : AppCompatActivity() {
 /**
  * 应用主内容
  * 控制欢迎页和主界面的显示切换
+ * 包含全局悬浮球
  */
 @Composable
 fun AppContent() {
     var showSplash by remember { mutableStateOf(true) }
     
-    if (showSplash) {
-        SplashScreen(
-            onSplashEnd = { showSplash = false }
-        )
-    } else {
-        MainScreen()
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 主内容
+        if (showSplash) {
+            SplashScreen(
+                onSplashEnd = { showSplash = false }
+            )
+        } else {
+            MainScreen()
+        }
+        
+        // 全局悬浮球：显示在最上层
+        FloatingBall()
     }
 }
 
@@ -1106,6 +1128,150 @@ fun ChapterListItem(
                 color = Color(0xFFCCCCCC),
                 modifier = Modifier.padding(start = 16.dp)
             )
+        }
+    }
+}
+
+/**
+ * 全局悬浮球组件
+ * 默认显示在左侧垂直居中位置，支持拖拽移动
+ * 优先级最高，显示在最上层，不影响用户操作其他事件
+ */
+@Composable
+fun FloatingBall() {
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    // 悬浮球尺寸
+    val ballSize = 56.dp
+    
+    // 使用BoxWithConstraints获取屏幕尺寸
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // 获取屏幕尺寸
+        val screenWidth = with(density) { maxWidth.toPx() }
+        val screenHeight = with(density) { maxHeight.toPx() }
+        val ballSizePx = with(density) { ballSize.toPx() }
+        
+        // 默认位置：左侧垂直居中
+        val defaultX = 0f
+        val defaultY = (screenHeight - ballSizePx) / 2f
+        
+        // 保存悬浮球位置状态
+        var offsetX by remember { mutableStateOf(defaultX) }
+        var offsetY by remember { mutableStateOf(defaultY) }
+        
+        // 拖拽时的临时偏移量
+        var dragOffsetX by remember { mutableStateOf(0f) }
+        var dragOffsetY by remember { mutableStateOf(0f) }
+        // 跟踪是否正在拖拽，用于阻止点击事件
+        var isDragging by remember { mutableStateOf(false) }
+        
+        Box(
+            modifier = Modifier
+                .offset {
+                    // 计算最终位置，限制在屏幕范围内
+                    val finalX = (offsetX + dragOffsetX).coerceIn(
+                        0f,
+                        screenWidth - ballSizePx
+                    )
+                    val finalY = (offsetY + dragOffsetY).coerceIn(
+                        0f,
+                        screenHeight - ballSizePx
+                    )
+                    IntOffset(finalX.roundToInt(), finalY.roundToInt())
+                }
+                .size(ballSize)
+                .pointerInput(Unit) {
+                    // 使用 detectDragGestures 检测拖拽（优先级高）
+                    detectDragGestures(
+                        onDragStart = {
+                            // 拖拽开始，标记为正在拖拽，阻止点击事件
+                            Log.i("YYT", "拖拽开始")
+                            isDragging = true
+                            dragOffsetX = 0f
+                            dragOffsetY = 0f
+                        },
+                        onDrag = { change, dragAmount ->
+                            // 更新临时偏移量
+                            dragOffsetX += dragAmount.x
+                            dragOffsetY += dragAmount.y
+                        },
+                        onDragEnd = {
+                            // 拖拽结束，更新最终位置
+                            Log.i("YYT", "拖拽结束，更新位置")
+                            offsetX = (offsetX + dragOffsetX).coerceIn(
+                                0f,
+                                screenWidth - ballSizePx
+                            )
+                            offsetY = (offsetY + dragOffsetY).coerceIn(
+                                0f,
+                                screenHeight - ballSizePx
+                            )
+                            // 重置临时偏移量
+                            dragOffsetX = 0f
+                            dragOffsetY = 0f
+                            // 延迟重置拖拽状态，避免立即触发点击
+                            coroutineScope.launch {
+                                delay(150)
+                                isDragging = false
+                            }
+                        }
+                    )
+                }
+                .clickable(enabled = !isDragging) {
+                    // 使用 clickable 处理点击（只有在没有拖拽时才启用）
+                    if (!isDragging) {
+                        Toast.makeText(context, "功能开发中。。。", Toast.LENGTH_SHORT).show()
+                        Log.i("YYT", "点击悬浮球")
+                    }
+                }
+        ) {
+            // 悬浮球UI - 优化样式
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = 0.85f // 整体透明度
+                        shape = RoundedCornerShape(28.dp) // 在图形层设置圆形形状
+                        clip = true // 启用裁剪
+                    }
+                    .shadow(
+                        elevation = 8.dp,
+                        shape = RoundedCornerShape(28.dp),
+                        spotColor = Color.Black.copy(alpha = 0.3f)
+                    )
+                    .clip(RoundedCornerShape(28.dp)) // 裁剪为圆形，确保所有内容都是圆形
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFFEC0934).copy(alpha = 0.7f), // 中心较不透明
+                                Color(0xFFEC0934).copy(alpha = 0.5f)  // 边缘较透明
+                            ),
+                            center = Offset(28f, 28f),
+                            radius = 28f
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // 图标或文字 - 使用渐变效果
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "⚙",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     }
 }

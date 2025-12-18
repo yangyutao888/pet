@@ -82,4 +82,6 @@ dependencies {
     implementation ("com.squareup.okhttp3:okhttp:4.11.0")
     // OkHttp 日志拦截器（调试用）
     implementation ("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    // Kotlin 协程支持
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
