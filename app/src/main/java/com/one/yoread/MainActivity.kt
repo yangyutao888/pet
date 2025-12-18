@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -45,16 +46,20 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 /**
  * 主页面
@@ -64,10 +69,113 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MaterialTheme {
-                // 主界面
-                MainScreen()
+                // 欢迎页和主界面切换
+                AppContent()
             }
         }
+    }
+}
+
+/**
+ * 应用主内容
+ * 控制欢迎页和主界面的显示切换
+ */
+@Composable
+fun AppContent() {
+    var showSplash by remember { mutableStateOf(true) }
+    
+    if (showSplash) {
+        SplashScreen(
+            onSplashEnd = { showSplash = false }
+        )
+    } else {
+        MainScreen()
+    }
+}
+
+/**
+ * 欢迎页组件
+ * 显示随机渐变背景和随机激励话语，3秒后自动跳转到主界面
+ * @param onSplashEnd 欢迎页结束回调
+ */
+@Composable
+fun SplashScreen(onSplashEnd: () -> Unit) {
+    // 随机激励话语列表
+    val motivationalQuotes = remember {
+        listOf(
+            "每一天都是新的开始",
+            "坚持就是胜利",
+            "相信自己，你能行",
+            "努力不会被辜负",
+            "今天的努力，明天的收获",
+            "梦想不会发光，发光的是追梦的你",
+            "越努力，越幸运",
+            "成功属于永不放弃的人",
+            "做最好的自己",
+            "行动胜过一切空想",
+            "每一次努力都是成长",
+            "坚持到底，就是胜利",
+            "相信自己，无限可能",
+            "今天的汗水，明天的辉煌",
+            "努力的人，运气不会太差"
+        )
+    }
+    
+    // 随机选择一句激励话语
+    val randomQuote = remember {
+        motivationalQuotes[Random.nextInt(motivationalQuotes.size)]
+    }
+    
+    // 生成随机渐变浅色背景
+    val gradientColors = remember {
+        // 浅色系颜色列表
+        val lightColors = listOf(
+            Color(0xFFFFE5E5), // 浅粉红
+            Color(0xFFE5F3FF), // 浅蓝色
+            Color(0xFFE5FFE5), // 浅绿色
+            Color(0xFFFFF5E5), // 浅橙色
+            Color(0xFFF0E5FF), // 浅紫色
+            Color(0xFFFFE5F0), // 浅玫瑰色
+            Color(0xFFE5FFFF), // 浅青色
+            Color(0xFFFFF0E5), // 浅桃色
+            Color(0xFFE5E5FF), // 浅靛蓝色
+            Color(0xFFFFF5F5)  // 浅米色
+        )
+        
+        // 随机选择两个颜色作为渐变的起点和终点
+        val color1 = lightColors[Random.nextInt(lightColors.size)]
+        val color2 = lightColors[Random.nextInt(lightColors.size)]
+        
+        // 创建渐变，从左上到右下
+        Brush.linearGradient(
+            colors = listOf(color1, color2),
+            start = Offset(0f, 0f),
+            end = Offset(1000f, 1000f)
+        )
+    }
+    
+    // 3秒后自动跳转到主界面
+    LaunchedEffect(Unit) {
+        delay(3000) // 3秒延迟
+        onSplashEnd()
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gradientColors),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = randomQuote,
+            fontSize = 52.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF333333), // 深灰色文字，在浅色背景上清晰可见
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 40.dp)
+        )
     }
 }
 
