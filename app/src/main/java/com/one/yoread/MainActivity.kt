@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -28,6 +29,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -60,6 +62,25 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.random.Random
+
+/**
+ * 卡片数据类
+ * 用于传递卡片信息到详情页
+ */
+data class CardData(
+    val title: String,
+    val author: String,
+    val coverImage: Int
+)
+
+/**
+ * 章节数据类
+ * 用于详情页右侧列表显示
+ */
+data class ChapterData(
+    val title: String,
+    val chapterCount: Int
+)
 
 /**
  * 主页面
@@ -193,6 +214,9 @@ fun MainScreen() {
     // 记录当前选中的 tab 索引，用于顶部导航栏显示
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
+    
+    // 详情页状态管理
+    var selectedCardData by remember { mutableStateOf<CardData?>(null) }
 
     // 监听 PagerState 的变化，同步到 selectedTabIndex
     LaunchedEffect(pagerState) {
@@ -201,36 +225,50 @@ fun MainScreen() {
         }
     }
 
-    // 首页整体背景色：灰黑色
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF2C2C2C)) // 灰黑色背景
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-        // 顶部导航栏区域（宽度撑满、高度80px）
-        TopNavigationBar(
-            selectedTabIndex = selectedTabIndex,
-            onTabSelected = { index ->
-                // 点击tab时，切换到对应的页面
-                coroutineScope.launch {
-                    pagerState.animateScrollToPage(index)
-                }
-            }
+    // 根据是否显示详情页来决定显示内容
+    if (selectedCardData != null) {
+        // 显示详情页
+        DetailScreen(
+            cardData = selectedCardData!!,
+            onBack = { selectedCardData = null }
         )
+    } else {
+        // 首页整体背景色：灰黑色
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF2C2C2C)) // 灰黑色背景
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+            // 顶部导航栏区域（宽度撑满、高度80px）
+            TopNavigationBar(
+                selectedTabIndex = selectedTabIndex,
+                onTabSelected = { index ->
+                    // 点击tab时，切换到对应的页面
+                    coroutineScope.launch {
+                        pagerState.animateScrollToPage(index)
+                    }
+                }
+            )
 
-            // Tab 关联的内容显示区域（撑满剩余屏幕区域）
-            // 使用 HorizontalPager 实现左右滑动切换
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .weight(1f) // 占据剩余空间
-            ) { page ->
-                // 根据页面索引显示不同的内容
-                TabContentPage(pageIndex = page)
+                // Tab 关联的内容显示区域（撑满剩余屏幕区域）
+                // 使用 HorizontalPager 实现左右滑动切换
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f) // 占据剩余空间
+                ) { page ->
+                    // 根据页面索引显示不同的内容
+                    TabContentPage(
+                        pageIndex = page,
+                        onCardClick = { cardData ->
+                            selectedCardData = cardData
+                        }
+                    )
+                }
             }
         }
     }
@@ -414,9 +452,13 @@ fun TabButton(
  * 根据页面索引显示不同的内容
  * 每个页面撑满整个显示区域
  * @param pageIndex 页面索引（0: 发现, 1: 推荐）
+ * @param onCardClick 卡片点击回调
  */
 @Composable
-fun TabContentPage(pageIndex: Int) {
+fun TabContentPage(
+    pageIndex: Int,
+    onCardClick: (CardData) -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize() // 撑满整个显示区域
@@ -427,7 +469,7 @@ fun TabContentPage(pageIndex: Int) {
         when (pageIndex) {
              0 -> {
                 // "发现" tab 的内容区域：垂直滑动布局
-                DiscoverContent()
+                DiscoverContent(onCardClick = onCardClick)
             }
             1 -> {
                 // "推荐" tab 的内容区域
@@ -456,9 +498,10 @@ fun TabContentPage(pageIndex: Int) {
 /**
  * 发现页内容区域
  * 实现垂直滑动布局，包含banner轮播图和分类列表
+ * @param onCardClick 卡片点击回调
  */
 @Composable
-fun DiscoverContent() {
+fun DiscoverContent(onCardClick: (CardData) -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(0.dp)
@@ -494,7 +537,7 @@ fun DiscoverContent() {
         // 每5个item组成一行，平分整体宽度
         // 总共20个item，分成4行
         val totalItems = 66
-        val itemsPerRow = 10
+        val itemsPerRow = 8
         val totalRows = (totalItems + itemsPerRow - 1) / itemsPerRow // 向上取整
         
         items(totalRows) { rowIndex ->
@@ -509,9 +552,23 @@ fun DiscoverContent() {
                     val itemIndex = rowIndex * itemsPerRow + colIndex
                     if (itemIndex < totalItems) {
                         // 使用weight来平分宽度
+                        // 封面图片列表（循环使用）
+                        val coverImages = listOf(
+                            R.drawable.nice,
+                            R.drawable.nice_a,
+                            R.drawable.nice_b
+                        )
+                        val cardData = CardData(
+                            title = "大话降龙 ${itemIndex + 1}",
+                            author = "作者 ${itemIndex + 1}",
+                            coverImage = coverImages[itemIndex % coverImages.size]
+                        )
                         CardItem(
-                            title = "卡片 ${itemIndex + 1}",
-                            modifier = Modifier.weight(1f)
+                            title = cardData.title,
+                            author = cardData.author,
+                            coverImage = cardData.coverImage,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onCardClick(cardData) }
                         )
                     } else {
                         // 如果最后一行不足5个，用Spacer填充
@@ -685,13 +742,20 @@ fun CategoryItem(text: String) {
 /**
  * 卡片项组件
  * 平分整体宽度5份，外边距15dp，高度为宽度的1.2倍，圆角10dp，随机背景色
+ * 包含封面、标题、作者信息，垂直布局
  * @param title 卡片标题
+ * @param author 作者名称
+ * @param coverImage 封面图片资源ID
  * @param modifier 修饰符
+ * @param onClick 点击回调
  */
 @Composable
 fun CardItem(
     title: String,
-    modifier: Modifier = Modifier
+    author: String,
+    coverImage: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
 ) {
     // 生成随机背景色（基于title的hashCode，确保相同title颜色一致）
     val backgroundColor = remember(title) {
@@ -714,9 +778,29 @@ fun CardItem(
     BoxWithConstraints(
         modifier = modifier
     ) {
-        // 计算高度：宽度 * 1.2
+        // 计算高度：宽度 * 1.5
         val cardWidth = maxWidth - 0.dp // 减去外边距已经在Row中处理
-        val cardHeight = cardWidth * 1.2f
+        val cardHeight = cardWidth * 1.5f
+        
+        // 自适应计算：基于卡片宽度计算字体大小和间距
+        // 基准宽度：60dp（参考值，可根据实际情况调整）
+        val baseWidth = 60.dp
+        // 计算缩放因子（限制在0.7到1.5之间，避免字体过大或过小）
+        val scaleFactor = (cardWidth / baseWidth).coerceIn(0.7f, 1.5f)
+        
+        // 基准字体大小和间距
+        val baseTitleFontSize = 12.sp
+        val baseAuthorFontSize = 10.sp
+        val baseTitleSpacing = 6.dp // 标题与封面的间距
+        val baseAuthorSpacing = 2.dp // 作者与标题的间距
+        val baseCoverTopPadding = 4.dp // 封面顶部间距
+        
+        // 根据缩放因子计算实际字体大小和间距
+        val titleFontSize = (baseTitleFontSize.value * scaleFactor).sp
+        val authorFontSize = (baseAuthorFontSize.value * scaleFactor).sp
+        val titleSpacing = baseTitleSpacing * scaleFactor
+        val authorSpacing = baseAuthorSpacing * scaleFactor
+        val coverTopPadding = baseCoverTopPadding * scaleFactor
         
         Box(
             modifier = Modifier
@@ -726,17 +810,56 @@ fun CardItem(
                     color = backgroundColor,
                     shape = RoundedCornerShape(10.dp) // 10dp圆角
                 )
-                .padding(12.dp),
-            contentAlignment = Alignment.Center
+                .clickable { onClick() } // 添加点击事件
+                .padding(8.dp * scaleFactor), // 整体内边距也根据缩放因子调整
+            contentAlignment = Alignment.TopCenter
         ) {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 2,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 封面：宽度占卡片宽度的90%，高度占卡片高度的70%，水平居中，向上靠近
+                val coverWidth = cardWidth * 0.9f
+                val coverHeight = cardHeight * 0.75f
+                
+                Image(
+                    painter = painterResource(id = coverImage),
+                    contentDescription = "封面",
+                    modifier = Modifier
+                        .width(coverWidth)
+                        .height(coverHeight)
+                        .padding(top = coverTopPadding) // 顶部外边距，根据缩放因子自适应
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                
+                // 标题：显示在封面下方，靠左显示，字体大小和间距自适应
+                Text(
+                    text = title,
+                    fontSize = titleFontSize, // 根据卡片宽度自适应
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f) // 宽度与封面一致
+                        .padding(top = titleSpacing) // 与封面的间距，根据缩放因子自适应
+                        .padding(horizontal = 0.dp), // 水平对齐封面
+                    textAlign = TextAlign.Left
+                )
+                
+                // 作者：显示在标题下方，靠左显示，字体大小和间距自适应
+                Text(
+                    text = author,
+                    fontSize = authorFontSize, // 根据卡片宽度自适应
+                    color = Color.Black.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f) // 宽度与封面一致
+                        .padding(top = authorSpacing) // 与标题的间距，根据缩放因子自适应
+                        .padding(horizontal = 0.dp), // 水平对齐封面
+                    textAlign = TextAlign.Left
+                )
+            }
         }
     }
 }
@@ -810,6 +933,179 @@ fun LogoDialog(onDismiss: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 详情页组件
+ * 左侧区域占30%显示封面、标题、作者信息
+ * 右侧区域占70%显示垂直滑动列表（标题+篇章数）
+ * @param cardData 卡片数据
+ * @param onBack 返回回调
+ */
+@Composable
+fun DetailScreen(
+    cardData: CardData,
+    onBack: () -> Unit
+) {
+    // 生成章节列表数据（示例数据，实际应该从数据源获取）
+    val chapters = remember {
+        (1..20).map { index ->
+            ChapterData(
+                title = "第${index}章",
+                chapterCount = Random.nextInt(10, 50) // 随机生成10-50的篇章数
+            )
+        }
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF2C2C2C)) // 灰黑色背景
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // 左侧区域：占30%宽度，显示封面、标题、作者信息
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.3f)
+                    .fillMaxHeight()
+                    .background(Color(0xFF1E1E1E)) // 稍深的背景色
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    // 封面
+                    Image(
+                        painter = painterResource(id = cardData.coverImage),
+                        contentDescription = "封面",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.5f) // 封面高度占左侧区域的50%
+                            .padding(vertical = 16.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // 标题
+                    Text(
+                        text = cardData.title,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // 作者
+                    Text(
+                        text = cardData.author,
+                        fontSize = 14.sp,
+                        color = Color(0xFFCCCCCC),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                
+                // 返回按钮：位于左上角，使用Box层叠在最上层
+                Box(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .size(40.dp)
+                        .background(
+                            color = Color(0xFF3C3C3C).copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            
+            // 右侧区域：占70%宽度，显示垂直滑动列表
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .fillMaxHeight()
+                    .background(Color(0xFF2C2C2C))
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(chapters) { chapter ->
+                        ChapterListItem(
+                            chapter = chapter,
+                            onClick = {
+                                // 可以在这里处理章节点击事件
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 章节列表项组件
+ * 显示标题和篇章数
+ * @param chapter 章节数据
+ * @param onClick 点击回调
+ */
+@Composable
+fun ChapterListItem(
+    chapter: ChapterData,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = Color(0xFF3C3C3C),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .clickable { onClick() }
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 标题
+            Text(
+                text = chapter.title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier.weight(1f)
+            )
+            
+            // 篇章数
+            Text(
+                text = "${chapter.chapterCount}篇",
+                fontSize = 14.sp,
+                color = Color(0xFFCCCCCC),
+                modifier = Modifier.padding(start = 16.dp)
+            )
         }
     }
 }
